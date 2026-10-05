@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import logging
 import threading
+from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Response, UploadFile, status
 
 from . import __version__, providers
@@ -24,7 +26,31 @@ from .providers import Unavailable
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("inference")
 
-app = FastAPI(title="agenteresolve-inference", version=__version__)
+
+def _ensure_ollama_model() -> None:
+    """Garante que o modelo local esteja no Ollama (pull no boot; não fatal)."""
+    settings = get_settings()
+    base = settings.ollama_url.rstrip("/")
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(f"{base}/api/tags")
+            response.raise_for_status()
+            names = {m.get("name") for m in response.json().get("models", [])}
+        if settings.llm_model not in names:
+            logger.info("pulling ollama model %s ...", settings.llm_model)
+            with httpx.Client(timeout=1800.0) as client:
+                client.post(f"{base}/api/pull", json={"name": settings.llm_model})
+    except Exception as exc:  # noqa: BLE001 - melhor esforço
+        logger.warning("ollama model ensure skipped: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    _ensure_ollama_model()
+    yield
+
+
+app = FastAPI(title="agenteresolve-inference", version=__version__, lifespan=lifespan)
 
 # Limita concorrência de operações pesadas (CPU modesto no Oracle).
 _sem = threading.Semaphore(max(1, get_settings().max_concurrency))

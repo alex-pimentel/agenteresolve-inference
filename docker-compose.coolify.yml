@@ -1,0 +1,33 @@
+# Compose Coolify: Ollama (LLM local) + API de inferência, no mesmo stack/rede.
+# O serviço `inference` é o único exposto (domínio); o Ollama fica interno.
+#
+#   docker compose -f docker-compose.coolify.yml up --build
+#
+name: agenteresolve-inference
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    expose:
+      - "11434"
+
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+    expose:
+      - "8000"
+    depends_on:
+      - ollama
+
+volumes:
+  ollama-models:
