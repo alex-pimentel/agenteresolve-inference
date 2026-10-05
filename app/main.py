@@ -28,18 +28,19 @@ logger = logging.getLogger("inference")
 
 
 def _ensure_ollama_model() -> None:
-    """Garante que o modelo local esteja no Ollama (pull no boot; não fatal)."""
+    """Garante que os modelos locais estejam no Ollama (pull no boot; não fatal)."""
     settings = get_settings()
     base = settings.ollama_url.rstrip("/")
+    wanted = {m for m in (settings.llm_model, settings.translate_model) if m}
     try:
         with httpx.Client(timeout=10.0) as client:
             response = client.get(f"{base}/api/tags")
             response.raise_for_status()
             names = {m.get("name") for m in response.json().get("models", [])}
-        if settings.llm_model not in names:
-            logger.info("pulling ollama model %s ...", settings.llm_model)
-            with httpx.Client(timeout=1800.0) as client:
-                client.post(f"{base}/api/pull", json={"name": settings.llm_model})
+        for model in wanted - names:
+            logger.info("pulling ollama model %s ...", model)
+            with httpx.Client(timeout=3600.0) as client:
+                client.post(f"{base}/api/pull", json={"name": model})
     except Exception as exc:  # noqa: BLE001 - melhor esforço
         logger.warning("ollama model ensure skipped: %s", exc)
 

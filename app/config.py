@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # LLM gateway (OpenAI-compatible) ------------------------------------
     ollama_url: str = "http://127.0.0.1:11434"
     llm_model: str = "qwen3.5:0.8b"
+    # Modelo dedicado a tradução (melhor para tradução; mantido junto ao geral).
+    translate_model: str = "translategemma:4b"
     openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "openai/gpt-4o-mini"
