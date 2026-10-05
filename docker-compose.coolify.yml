@@ -24,6 +24,10 @@ services:
         required: false
     environment:
       - OLLAMA_URL=http://ollama:11434
+    # Exposto no host (acessível via tailnet 100.92.240.55:8000 e, se o firewall
+    # do Oracle liberar, publicamente). Auth por INFERENCE_KEY.
+    ports:
+      - "8000:8000"
     expose:
       - "8000"
     depends_on:
