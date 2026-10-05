@@ -1,0 +1,8 @@
+# Modelos de visão/TTS/embeddings (pesados). Instalados em best-effort no Dockerfile:
+# se um wheel não existir para a arquitetura (ex. arm64), o serviço sobe e o endpoint
+# correspondente responde 503 provider_unavailable.
+torch>=2.4
+transformers>=4.46
+sentence-transformers>=3.2
+ultralytics>=8.3
+piper-tts>=1.2
