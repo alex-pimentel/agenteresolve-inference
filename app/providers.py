@@ -184,6 +184,7 @@ def enhance(data: bytes, *, mode: str = "denoise") -> tuple[bytes, str]:
 def synthesize(text: str, *, voice: str | None = None, lang: str | None = None, speed: float = 1.0) -> tuple[bytes, str]:
     try:
         import piper  # type: ignore
+        from piper.config import SynthesisConfig
     except ImportError as exc:
         raise Unavailable(f"tts dependency missing: {exc}") from exc
 
@@ -191,9 +192,9 @@ def synthesize(text: str, *, voice: str | None = None, lang: str | None = None, 
     voice_name = voice or settings.piper_voice
     try:
         piper_voice = piper.PiperVoice.load(voice_name)
-        stream = piper_voice.synthesize(text, length_scale=1.0 / max(speed, 0.1))
+        syn_config = SynthesisConfig(length_scale=1.0 / max(speed, 0.1))
         buffer = io.BytesIO()
-        for chunk in stream:
+        for chunk in piper_voice.synthesize(text, syn_config=syn_config):
             buffer.write(chunk.audio_int16_bytes)
         return buffer.getvalue(), "audio/wav"
     except Exception as exc:  # noqa: BLE001
