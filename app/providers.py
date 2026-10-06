@@ -191,12 +191,23 @@ def synthesize(text: str, *, voice: str | None = None, lang: str | None = None, 
     settings = get_settings()
     voice_name = voice or settings.piper_voice
     try:
+        import wave
+
         piper_voice = piper.PiperVoice.load(voice_name)
         syn_config = SynthesisConfig(length_scale=1.0 / max(speed, 0.1))
+        chunks = list(piper_voice.synthesize(text, syn_config=syn_config))
+        if not chunks:
+            raise Unavailable("piper produced no audio")
         buffer = io.BytesIO()
-        for chunk in piper_voice.synthesize(text, syn_config=syn_config):
-            buffer.write(chunk.audio_int16_bytes)
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(chunks[0].sample_channels)
+            wav.setsampwidth(chunks[0].sample_width)
+            wav.setframerate(chunks[0].sample_rate)
+            for chunk in chunks:
+                wav.writeframes(chunk.audio_int16_bytes)
         return buffer.getvalue(), "audio/wav"
+    except Unavailable:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise Unavailable(f"piper synthesis failed for {voice_name!r}: {exc}") from exc
 
