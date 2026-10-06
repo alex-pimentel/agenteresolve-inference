@@ -31,6 +31,10 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt \
     && (pip install -r requirements-ml.txt || echo "AVISO: deps de ML parciais; endpoints afetados respondem 503")
 
+# Voz do Piper (TTS) embutida na imagem (best-effort).
+RUN python -m piper.download_voices en_US-lessac-medium --download-dir /app/voices \
+    || echo "AVISO: voz do Piper não baixada; /synthesize responderá 503"
+
 COPY app ./app
 
 EXPOSE 8000

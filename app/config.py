@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     caption_model: str = "Salesforce/blip-image-captioning-base"
     detect_model: str = "yolov8n.pt"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    piper_voice: str = "en_US-lessac-medium"
+    # Caminho do modelo .onnx (o config é lido de "<model>.json").
+    piper_voice: str = "/app/voices/en_US-lessac-medium.onnx"
 
     # Limites -------------------------------------------------------------
     max_concurrency: int = 1

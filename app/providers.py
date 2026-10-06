@@ -61,19 +61,22 @@ def caption(data: bytes) -> dict[str, Any]:
     global _caption_pipe
     try:
         from PIL import Image
-        from transformers import pipeline
+        from transformers import BlipForConditionalGeneration, BlipProcessor
     except ImportError as exc:
         raise Unavailable(f"caption dependency missing: {exc}") from exc
 
     settings = get_settings()
     with _lock:
         if _caption_pipe is None:
-            _caption_pipe = pipeline("image-to-text", model=settings.caption_model)
+            processor = BlipProcessor.from_pretrained(settings.caption_model)
+            model = BlipForConditionalGeneration.from_pretrained(settings.caption_model)
+            model.eval()
+            _caption_pipe = (processor, model)
+    processor, model = _caption_pipe
     image = Image.open(io.BytesIO(data)).convert("RGB")
-    output = _caption_pipe(image)
-    if isinstance(output, list) and output:
-        return {"caption": str(output[0].get("generated_text", "")).strip()}
-    return {"caption": str(output).strip()}
+    inputs = processor(image, return_tensors="pt")
+    output = model.generate(**inputs, max_new_tokens=40)
+    return {"caption": processor.decode(output[0], skip_special_tokens=True).strip()}
 
 
 def detect(data: bytes, *, labels: list[str] | None = None) -> dict[str, Any]:
