@@ -13,3 +13,5 @@ python-docx>=1.1
 python-pptx>=1.0
 openpyxl>=3.1
 faster-whisper>=1.0
+# av>=19 removeu o kwarg 'metadata_errors' usado pelo faster-whisper 1.2.x.
+av<19

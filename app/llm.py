@@ -20,8 +20,11 @@ class LLMUnavailable(RuntimeError):
 def _ollama_chat(payload: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
     url = f"{settings.ollama_url.rstrip('/')}/v1/chat/completions"
+    body = dict(payload)
+    # Modelos de raciocínio (ex.: qwen3.5) travam gerando a cadeia de pensamento.
+    body.setdefault("think", False)
     with httpx.Client(timeout=settings.llm_timeout) as client:
-        response = client.post(url, json=payload)
+        response = client.post(url, json=body)
         response.raise_for_status()
         return response.json()
 
