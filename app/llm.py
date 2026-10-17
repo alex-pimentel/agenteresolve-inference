@@ -6,12 +6,15 @@ O contrato é o mesmo consumido por ``OpenAICompatibleLLM`` no código existente
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 import httpx
 
 from .config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMUnavailable(RuntimeError):
@@ -67,7 +70,10 @@ def _ollama_chat(payload: dict[str, Any]) -> dict[str, Any]:
     # endpoint OpenAI-compatible; o que funciona é ``reasoning_effort``.
     body.pop("think", None)
     body.setdefault("reasoning_effort", "none")
-    with httpx.Client(timeout=settings.llm_timeout) as client:
+    # Orçamento curto de propósito: o passo local não pode consumir o tempo que o
+    # chamador reservou para a resposta inteira, senão o fallback remoto não roda (ver
+    # ``llm_local_timeout`` em config.py).
+    with httpx.Client(timeout=settings.llm_local_timeout) as client:
         response = client.post(url, json=body)
         response.raise_for_status()
         return response.json()
@@ -96,9 +102,18 @@ def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
     O modelo pedido pelo cliente é resolvido para um modelo local disponível (ver
     :func:`_local_model`); o ``payload`` original segue intacto para o fallback.
     """
+    started = time.monotonic()
     try:
         return _ollama_chat(payload)
     except Exception as local_exc:  # noqa: BLE001 - cai no fallback
+        # Visível de propósito: sem esta linha, uma queda silenciosa para o remoto (ou
+        # para um local lento) não aparecia em log nenhum.
+        logger.info(
+            "local LLM falhou em %.1fs (%s: %s); caindo no remoto",
+            time.monotonic() - started,
+            type(local_exc).__name__,
+            local_exc,
+        )
         try:
             return _openrouter_chat(payload)
         except Exception as remote_exc:  # noqa: BLE001 - reporta ambos

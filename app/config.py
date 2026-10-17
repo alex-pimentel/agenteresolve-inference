@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "openai/gpt-4o-mini"
+    # Orçamento do passo **local** (Ollama) dentro da cadeia local→remoto. Medido em
+    # 2026-10-17: num host de 2 vCPU o mesmo 7B passa de 180 s num prompt grande e era
+    # esse o valor que o worker esperava antes de cortar — com isso o fallback gratuito
+    # nunca chegava a rodar e a ferramenta estourava em ~300 s (translate/seo/feedback)
+    # ou morria com "Broken pipe" quando o container era reciclado. Com orçamento curto,
+    # o que não sai rápido no local vai para o remoto, que é rápido.
+    llm_local_timeout: float = 25.0
+    # Orçamento do passo remoto (OpenRouter), que é quem de fato atende no dia a dia.
     llm_timeout: float = 180.0
 
     # Modelos locais ------------------------------------------------------
