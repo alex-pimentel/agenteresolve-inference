@@ -10,4 +10,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["E501"]
+# B008: o FastAPI exige a chamada (`File(...)`, `Form(...)`, `Depends(...)`) no default do
+# parâmetro; é o mesmo critério já adotado no repositório agenteresolve-services.
+ignore = ["E501", "B008"]
