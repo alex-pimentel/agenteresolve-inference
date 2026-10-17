@@ -10,9 +10,12 @@ Auth: Bearer INFERENCE_KEY (exceto /health).
 
 from __future__ import annotations
 
+import base64
 import io
 import logging
 import threading
+import time
+import wave
 from contextlib import asynccontextmanager
 
 import httpx
@@ -46,9 +49,60 @@ def _ensure_ollama_model() -> None:
         logger.warning("ollama model ensure skipped: %s", exc)
 
 
+# PNG 1x1 transparente: entrada mínima para carregar os modelos de visão no boot.
+_TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def _silent_wav(seconds: float = 0.2, rate: int = 16000) -> bytes:
+    """WAV silencioso mínimo (mono, 16 bits) para aquecer o Whisper."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(b"\x00\x00" * int(rate * seconds))
+    return buffer.getvalue()
+
+
+def _warmup() -> None:
+    """Carrega os modelos locais no boot, antes de aceitar tráfego.
+
+    Medido em 2026-10-17: a **primeira** chamada de ``tts`` depois de um deploy levou
+    302 s (timeout no cliente) e a segunda, 7 s. O custo era do carregamento do modelo,
+    não da síntese — e caía no colo de quem chegasse primeiro, inclusive da rotina
+    diária, que então acusaria uma falha que não existe. Estes endpoints não têm
+    fallback remoto, então aquecer no boot é a única forma de tirar o custo do caminho
+    do usuário. Melhor esforço: falha de aquecimento não derruba o serviço.
+    """
+    settings = get_settings()
+    if not settings.warmup:
+        logger.info("warmup desligado (WARMUP=0)")
+        return
+    audio = _silent_wav()
+    steps: tuple[tuple[str, object], ...] = (
+        ("tts", lambda: providers.synthesize("ok")),
+        ("embeddings", lambda: providers.embeddings(["ok"])),
+        ("ocr", lambda: providers.ocr(_TINY_PNG)),
+        ("caption", lambda: providers.caption(_TINY_PNG)),
+        ("detect", lambda: providers.detect(_TINY_PNG)),
+        ("transcribe", lambda: providers.transcribe(audio)),
+    )
+    for name, step in steps:
+        started = time.monotonic()
+        try:
+            step()  # type: ignore[operator]
+        except Exception as exc:  # noqa: BLE001 - aquecer é melhor esforço
+            logger.warning("warmup %s falhou: %s", name, exc)
+        else:
+            logger.info("warmup %s ok em %.1fs", name, time.monotonic() - started)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _ensure_ollama_model()
+    _warmup()
     yield
 
 
@@ -196,9 +250,7 @@ def tts_legacy(
     speed: float = Form(default=1.0),
 ) -> Response:
     try:
-        content, media_type = _run(
-            providers.synthesize, text, voice=voice, lang=lang, speed=speed
-        )
+        content, media_type = _run(providers.synthesize, text, voice=voice, lang=lang, speed=speed)
     except Unavailable as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     return Response(content=content, media_type=media_type)

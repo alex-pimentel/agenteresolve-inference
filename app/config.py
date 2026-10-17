@@ -44,6 +44,10 @@ class Settings(BaseSettings):
 
     # Limites -------------------------------------------------------------
     max_concurrency: int = 1
+    # Carregar os modelos locais no boot (ver ``_warmup`` em main.py). Medido em
+    # 2026-10-17: a primeira chamada de ``tts`` depois de um deploy levou 302 s e a
+    # segunda, 7 s — o custo era do carregamento e caía no primeiro que chegasse.
+    warmup: bool = True
 
 
 @lru_cache
