@@ -82,12 +82,12 @@ def _warmup() -> None:
         return
     audio = _silent_wav()
     steps: tuple[tuple[str, object], ...] = (
-        ("tts", lambda: providers.synthesize("ok")),
-        ("embeddings", lambda: providers.embeddings(["ok"])),
-        ("ocr", lambda: providers.ocr(_TINY_PNG)),
-        ("caption", lambda: providers.caption(_TINY_PNG)),
-        ("detect", lambda: providers.detect(_TINY_PNG)),
-        ("transcribe", lambda: providers.transcribe(audio)),
+        ("tts", lambda: _run(providers.synthesize, "ok")),
+        ("embeddings", lambda: _run(providers.embeddings, ["ok"])),
+        ("ocr", lambda: _run(providers.ocr, _TINY_PNG)),
+        ("caption", lambda: _run(providers.caption, _TINY_PNG)),
+        ("detect", lambda: _run(providers.detect, _TINY_PNG)),
+        ("transcribe", lambda: _run(providers.transcribe, audio)),
     )
     for name, step in steps:
         started = time.monotonic()
@@ -102,7 +102,15 @@ def _warmup() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _ensure_ollama_model()
-    _warmup()
+    if get_settings().warmup:
+        # Em thread, de propósito: chamar _warmup() direto segurava a subida e deixava a
+        # inferência ~45 s sem aceitar conexão depois de cada deploy (medido em
+        # 2026-10-18) — o vigia lia isso como serviço fora do ar. Cada passo do
+        # aquecimento pega o semáforo de concorrência, então a requisição que chegar no
+        # meio espera a vez: lenta, mas com 200, não com "connection refused".
+        threading.Thread(target=_warmup, name="warmup", daemon=True).start()
+    else:
+        logger.info("warmup desligado (WARMUP=0)")
     yield
 
 
